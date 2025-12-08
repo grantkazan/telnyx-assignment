@@ -1,3 +1,6 @@
+import os
+
+# Database configuration - use Postgres in production, SQLite locally
 from flask import Flask, request, jsonify
 import sqlite3
 from flask_cors import CORS
@@ -8,14 +11,111 @@ CORS(app)
 
 DATABASE = 'appointments.db'
 
+DATABASE_URL = os.getenv('DATABASE_URL')
+
 # Helper function to get database connection
 def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row  # Return rows as dictionaries
-    return conn
+    if DATABASE_URL:
+        # Production - use PostgreSQL
+        import psycopg2
+        import psycopg2.extras
+        conn = psycopg2.connect(DATABASE_URL)
+        # Make it return dict-like rows similar to SQLite
+        conn.cursor_factory = psycopg2.extras.RealDictCursor
+        return conn
+    else:
+        # Local development - use SQLite
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        return conn
 
 # Initialize database with tables
 def init_db():
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if DATABASE_URL:
+        # PostgreSQL syntax
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS doctors (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                specialty TEXT
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS patients (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                phone TEXT UNIQUE NOT NULL
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS appointments (
+                id SERIAL PRIMARY KEY,
+                doctor_id INTEGER NOT NULL,
+                patient_id INTEGER NOT NULL,
+                datetime TEXT NOT NULL,
+                status TEXT NOT NULL,
+                FOREIGN KEY (doctor_id) REFERENCES doctors(id),
+                FOREIGN KEY (patient_id) REFERENCES patients(id)
+            )
+        ''')
+        
+        # Check if data exists
+        cursor.execute("SELECT COUNT(*) FROM doctors")
+        count = cursor.fetchone()['count'] if DATABASE_URL else cursor.fetchone()[0]
+    else:
+        # SQLite syntax (your existing code)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS doctors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                specialty TEXT
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS patients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                phone TEXT UNIQUE NOT NULL
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS appointments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doctor_id INTEGER NOT NULL,
+                patient_id INTEGER NOT NULL,
+                datetime TEXT NOT NULL,
+                status TEXT NOT NULL,
+                FOREIGN KEY (doctor_id) REFERENCES doctors(id),
+                FOREIGN KEY (patient_id) REFERENCES patients(id)
+            )
+        ''')
+        
+        cursor.execute("SELECT COUNT(*) FROM doctors")
+        count = cursor.fetchone()[0]
+    
+    # Seed data only if empty
+    if count == 0:
+        cursor.execute("INSERT INTO doctors (name, specialty) VALUES ('Dr. Smith', 'General Practice')")
+        cursor.execute("INSERT INTO doctors (name, specialty) VALUES ('Dr. Jones', 'Cardiology')")
+        cursor.execute("INSERT INTO doctors (name, specialty) VALUES ('Dr. Williams', 'Pediatrics')")
+        
+        cursor.execute("INSERT INTO patients (name, phone) VALUES ('Alice', '1-555-0101')")
+        cursor.execute("INSERT INTO patients (name, phone) VALUES ('Bobby', '1-555-0102')")
+        cursor.execute("INSERT INTO patients (name, phone) VALUES ('Charlie', '1-555-0103')")
+        
+        cursor.execute("INSERT INTO appointments (doctor_id, patient_id, datetime, status) VALUES (1, 1, '2025-12-08 13:00:00', 'scheduled')")
+        cursor.execute("INSERT INTO appointments (doctor_id, patient_id, datetime, status) VALUES (1, 2, '2025-12-08 14:00:00', 'scheduled')")
+        cursor.execute("INSERT INTO appointments (doctor_id, patient_id, datetime, status) VALUES (3, 3, '2025-12-08 15:00:00', 'scheduled')")
+    
+    conn.commit()
+    conn.close()
     conn = get_db()
     cursor = conn.cursor()
     

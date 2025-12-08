@@ -17,11 +17,9 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 def get_db():
     if DATABASE_URL:
         # Production - use PostgreSQL
-        import psycopg2
-        import psycopg2.extras
-        conn = psycopg2.connect(DATABASE_URL)
-        # Make it return dict-like rows similar to SQLite
-        conn.cursor_factory = psycopg2.extras.RealDictCursor
+        import psycopg
+        from psycopg.rows import dict_row
+        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
         return conn
     else:
         # Local development - use SQLite
@@ -187,6 +185,10 @@ def get_patients():
     conn.close()
     return jsonify(patients)
 
+@app.route('/sanity', methods=['GET'])
+def get_sanity():
+    return jsonify({'sanity check': True})
+
 @app.route('/appointments', methods=['GET'])
 def get_appointments():
     patient_phone = request.args.get('patient_phone')
@@ -196,12 +198,12 @@ def get_appointments():
     
     # If patient_phone is provided, filter by patient
     if patient_phone:
-        print(f"Looking for patient with phone: '{patient_phone}'")
+        # print(f"Looking for patient with phone: '{patient_phone}'")
         
         # First, check if patient exists
         cursor.execute("SELECT * FROM patients WHERE phone = ?", (patient_phone,))
         patient = cursor.fetchone()
-        print(f"Found patient: {dict(patient) if patient else None}")
+        # print(f"Found patient: {dict(patient) if patient else None}")
         
 
         cursor.execute("""

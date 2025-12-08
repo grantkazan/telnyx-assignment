@@ -1,0 +1,16 @@
+venv/
+
+# Database (optional - your call)
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables (if you add any later)
+.env

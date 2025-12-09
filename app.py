@@ -218,22 +218,26 @@ def book_appointment():
     if patient:
         patient_id = patient['id']
     else:
-        cursor.execute(f"INSERT INTO patients (name, phone) VALUES ({placeholder}, {placeholder})", (patient_name, patient_phone))
-        patient_id = cursor.lastrowid if not DATABASE_URL else cursor.fetchone()['id'] if cursor.rowcount else None
-        if DATABASE_URL and not patient_id:
-            cursor.execute("SELECT lastval()")
-            patient_id = cursor.fetchone()['lastval']
+        if DATABASE_URL:
+            cursor.execute(f"INSERT INTO patients (name, phone) VALUES ({placeholder}, {placeholder}) RETURNING id", (patient_name, patient_phone))
+            patient_id = cursor.fetchone()['id']
+        else:
+            cursor.execute(f"INSERT INTO patients (name, phone) VALUES ({placeholder}, {placeholder})", (patient_name, patient_phone))
+            patient_id = cursor.lastrowid
     
     # Book appointment
-    cursor.execute(f"""
-        INSERT INTO appointments (doctor_id, patient_id, datetime, status)
-        VALUES ({placeholder}, {placeholder}, {placeholder}, 'scheduled')
-    """, (doctor_id, patient_id, datetime_str))
-    
     if DATABASE_URL:
-        cursor.execute("SELECT lastval() as id")
+        cursor.execute(f"""
+            INSERT INTO appointments (doctor_id, patient_id, datetime, status)
+            VALUES ({placeholder}, {placeholder}, {placeholder}, 'scheduled')
+            RETURNING id
+        """, (doctor_id, patient_id, datetime_str))
         appointment_id = cursor.fetchone()['id']
     else:
+        cursor.execute(f"""
+            INSERT INTO appointments (doctor_id, patient_id, datetime, status)
+            VALUES ({placeholder}, {placeholder}, {placeholder}, 'scheduled')
+        """, (doctor_id, patient_id, datetime_str))
         appointment_id = cursor.lastrowid
     
     conn.commit()

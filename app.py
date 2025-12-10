@@ -274,18 +274,20 @@ def get_caller_context():
     # Telnyx sends caller phone number as 'from'
     caller_phone = data.get('from', '')
     
-    # Clean and format phone number to match your database format
-    # Input might be: +15550101 or +1-555-0101
-    # Your DB format: 1-555-0101
-    cleaned = caller_phone.replace('+', '').replace('-', '').replace(' ', '')
+    # Clean phone number - remove all non-digits
+    cleaned = ''.join(filter(str.isdigit, caller_phone))
     
-    if cleaned.startswith('1') and len(cleaned) == 11:
-        formatted_phone = f"1-{cleaned[1:4]}-{cleaned[4:]}"
+    # Format to match database: 1-XXX-XXX-XXXX
+    if len(cleaned) == 11 and cleaned.startswith('1'):
+        formatted_phone = f"1-{cleaned[1:4]}-{cleaned[4:7]}-{cleaned[7:]}"
+    elif len(cleaned) == 10:
+        formatted_phone = f"1-{cleaned[0:3]}-{cleaned[3:6]}-{cleaned[6:]}"
     else:
-        # Unknown format, return generic response
         return jsonify({
             'is_existing_patient': False,
-            'patient_name': 'caller'
+            'patient_name': 'caller',
+            'debug_cleaned': cleaned,
+            'debug_original': caller_phone
         })
     
     conn = get_db()
@@ -293,7 +295,6 @@ def get_caller_context():
     placeholder = get_placeholder()
     
     try:
-        # Look up patient
         cursor.execute(f"SELECT * FROM patients WHERE phone = {placeholder}", (formatted_phone,))
         patient = cursor.fetchone()
         
@@ -307,7 +308,6 @@ def get_caller_context():
                 JOIN doctors d ON a.doctor_id = d.id
                 WHERE a.patient_id = {placeholder} 
                 AND a.status = 'scheduled'
-                AND a.datetime >= datetime('now')
                 ORDER BY a.datetime
                 LIMIT 1
             """, (patient_dict['id'],))
@@ -331,11 +331,12 @@ def get_caller_context():
             conn.close()
             return jsonify(response_data)
         else:
-            # New caller
             conn.close()
             return jsonify({
                 'is_existing_patient': False,
-                'patient_name': 'caller'
+                'patient_name': 'caller',
+                'debug_formatted': formatted_phone,
+                'debug_cleaned': cleaned
             })
             
     except Exception as e:

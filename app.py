@@ -284,10 +284,9 @@ def get_caller_context():
         formatted_phone = f"1-{cleaned[0:3]}-{cleaned[3:6]}-{cleaned[6:]}"
     else:
         return jsonify({
-            'is_existing_patient': False,
-            'patient_name': 'caller',
-            'debug_cleaned': cleaned,
-            'debug_original': caller_phone
+            'dynamic_variables': {
+                'patient_name': 'caller'
+            }
         })
     
     conn = get_db()
@@ -329,22 +328,21 @@ def get_caller_context():
                 response_data['has_upcoming_appointment'] = False
             
             conn.close()
-            return jsonify(response_data)
+            return jsonify({'dynamic_variables': response_data})
         else:
             conn.close()
             return jsonify({
-                'is_existing_patient': False,
-                'patient_name': 'caller',
-                'debug_formatted': formatted_phone,
-                'debug_cleaned': cleaned
+                  'dynamic_variables': {
+                    'patient_name': 'caller'
+                }
             })
             
     except Exception as e:
         conn.close()
         return jsonify({
-            'is_existing_patient': False,
-            'patient_name': 'caller',
-            'error': str(e)
+            'dynamic_variables': {
+            'patient_name': 'caller'
+            }
         })
 
 if __name__ == '__main__':

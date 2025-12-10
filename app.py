@@ -270,9 +270,9 @@ def update_appointment(appointment_id):
 def get_caller_context():
     """Webhook endpoint for Telnyx to get caller context via Dynamic Webhook Variables"""
     data = request.json
+    payload = data.get('data', {}).get('payload', {})
     
-    # Telnyx sends caller phone number as 'from'
-    caller_phone = data.get('from', '')
+    caller_phone = payload.get('telnyx_end_user_target', data.get('from', ''))
     
     # Clean phone number - remove all non-digits
     cleaned = ''.join(filter(str.isdigit, caller_phone))

@@ -265,6 +265,87 @@ def update_appointment(appointment_id):
     
     return jsonify({'appointment_id': appointment_id, 'updated': True})
 
+# webhook for caller context
+@app.route('/webhook/caller-context', methods=['POST'])
+def get_caller_context():
+    """Webhook endpoint for Telnyx to get caller context via Dynamic Webhook Variables"""
+    data = request.json
+    
+    # Telnyx sends caller phone number as 'from'
+    caller_phone = data.get('from', '')
+    
+    # Clean and format phone number to match your database format
+    # Input might be: +15550101 or +1-555-0101
+    # Your DB format: 1-555-0101
+    cleaned = caller_phone.replace('+', '').replace('-', '').replace(' ', '')
+    
+    if cleaned.startswith('1') and len(cleaned) == 11:
+        formatted_phone = f"1-{cleaned[1:4]}-{cleaned[4:]}"
+    else:
+        # Unknown format, return generic response
+        return jsonify({
+            'is_existing_patient': False,
+            'patient_name': 'caller'
+        })
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    placeholder = get_placeholder()
+    
+    try:
+        # Look up patient
+        cursor.execute(f"SELECT * FROM patients WHERE phone = {placeholder}", (formatted_phone,))
+        patient = cursor.fetchone()
+        
+        if patient:
+            patient_dict = dict(patient)
+            
+            # Get their next upcoming appointment
+            cursor.execute(f"""
+                SELECT a.id, d.name as doctor_name, a.datetime, a.status
+                FROM appointments a
+                JOIN doctors d ON a.doctor_id = d.id
+                WHERE a.patient_id = {placeholder} 
+                AND a.status = 'scheduled'
+                AND a.datetime >= datetime('now')
+                ORDER BY a.datetime
+                LIMIT 1
+            """, (patient_dict['id'],))
+            
+            next_appt = cursor.fetchone()
+            
+            response_data = {
+                'is_existing_patient': True,
+                'patient_name': patient_dict['name'],
+                'patient_phone': patient_dict['phone']
+            }
+            
+            if next_appt:
+                appt_dict = dict(next_appt)
+                response_data['has_upcoming_appointment'] = True
+                response_data['next_appointment_doctor'] = appt_dict['doctor_name']
+                response_data['next_appointment_datetime'] = appt_dict['datetime']
+            else:
+                response_data['has_upcoming_appointment'] = False
+            
+            conn.close()
+            return jsonify(response_data)
+        else:
+            # New caller
+            conn.close()
+            return jsonify({
+                'is_existing_patient': False,
+                'patient_name': 'caller'
+            })
+            
+    except Exception as e:
+        conn.close()
+        return jsonify({
+            'is_existing_patient': False,
+            'patient_name': 'caller',
+            'error': str(e)
+        })
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

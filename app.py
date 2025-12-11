@@ -28,6 +28,8 @@ def get_db():
 def get_placeholder():
     return '%s' if DATABASE_URL else '?'
 
+
+## Helper functions for validating correct dates and patient availability
 # Validation helper functions
 def validate_appointment_datetime(datetime_str): # ensure all appointments are in the future
     """
@@ -43,11 +45,9 @@ def validate_appointment_datetime(datetime_str): # ensure all appointments are i
     try:
         # Parse the datetime string
         appointment_dt = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
-        
         # Check if appointment is in the past
         if appointment_dt < datetime.now():
             return False, "Cannot schedule appointments in the past"
-        
         # Optional: Check if appointment is too far in the future (e.g., 1 year)
         # max_future = datetime.now() + timedelta(days=365)
         # if appointment_dt > max_future:
@@ -57,6 +57,48 @@ def validate_appointment_datetime(datetime_str): # ensure all appointments are i
         
     except ValueError:
         return False, "Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS"
+
+def check_patient_availability(conn, patient_id, datetime_str, exclude_appointment_id=None):
+    """
+    Check if patient already has an appointment at the given time.
+    
+    Args:
+        conn: Database connection
+        patient_id: Patient ID to check
+        datetime_str: Datetime string in format 'YYYY-MM-DD HH:MM:SS'
+        exclude_appointment_id: Optional appointment ID to exclude (for rescheduling)
+    
+    Returns:
+        tuple: (is_available, error_message)
+    """
+    cursor = conn.cursor()
+    placeholder = get_placeholder()
+    
+    if exclude_appointment_id:
+        # When rescheduling, exclude the current appointment from conflict check
+        cursor.execute(f"""
+            SELECT id FROM appointments 
+            WHERE patient_id = {placeholder} 
+            AND datetime = {placeholder} 
+            AND status = 'scheduled'
+            AND id != {placeholder}
+        """, (patient_id, datetime_str, exclude_appointment_id))
+    else:
+        # When booking new appointment
+        cursor.execute(f"""
+            SELECT id FROM appointments 
+            WHERE patient_id = {placeholder} 
+            AND datetime = {placeholder} 
+            AND status = 'scheduled'
+        """, (patient_id, datetime_str))
+    
+    conflict = cursor.fetchone()
+    
+    if conflict:
+        return False, "Patient already has an appointment scheduled at this time"
+    
+    return True, None
+## end helper functions
 
 # Initialize database with tables
 def init_db():
@@ -238,6 +280,7 @@ def book_appointment():
     datetime_str = data.get('datetime')
     placeholder = get_placeholder()
 
+    # ensure appointment is in the future
     is_valid, error_message = validate_appointment_datetime(datetime_str)
     if not is_valid:
         return jsonify({'error': error_message}), 400
@@ -259,6 +302,13 @@ def book_appointment():
             cursor.execute(f"INSERT INTO patients (name, phone) VALUES ({placeholder}, {placeholder})", (patient_name, patient_phone))
             patient_id = cursor.lastrowid
     
+    # Check if patient is already booked at this time
+    is_available, error_message = check_patient_availability(conn, patient_id, datetime_str)
+    if not is_available:
+        conn.close()
+        return jsonify({'error': error_message}), 409  # 409 Conflict
+    
+
     # Book appointment
     if DATABASE_URL:
         cursor.execute(f"""
@@ -294,6 +344,24 @@ def update_appointment(appointment_id):
     
     conn = get_db()
     cursor = conn.cursor()
+
+       # If rescheduling, check for patient conflicts
+    if new_datetime:
+        # First, get the patient_id for this appointment
+        cursor.execute(f"SELECT patient_id FROM appointments WHERE id = {placeholder}", (appointment_id,))
+        appointment = cursor.fetchone()
+        
+        if not appointment:
+            conn.close()
+            return jsonify({'error': 'Appointment not found'}), 404
+        
+        patient_id = appointment['patient_id']
+        
+        # Check if patient is available at the new time (excluding this appointment)
+        is_available, error_message = check_patient_availability(conn, patient_id, new_datetime, exclude_appointment_id=appointment_id)
+        if not is_available:
+            conn.close()
+            return jsonify({'error': error_message}), 409
     
     if new_datetime:
         cursor.execute(f"UPDATE appointments SET datetime = {placeholder} WHERE id = {placeholder}", (new_datetime, appointment_id))

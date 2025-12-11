@@ -28,6 +28,36 @@ def get_db():
 def get_placeholder():
     return '%s' if DATABASE_URL else '?'
 
+# Validation helper functions
+def validate_appointment_datetime(datetime_str): # ensure all appointments are in the future
+    """
+    Validate appointment datetime string.
+    Returns (is_valid, error_message) tuple.
+    
+    Args:
+        datetime_str: String in format 'YYYY-MM-DD HH:MM:SS'
+    
+    Returns:
+        tuple: (bool, str) - (is_valid, error_message)
+    """
+    try:
+        # Parse the datetime string
+        appointment_dt = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
+        
+        # Check if appointment is in the past
+        if appointment_dt < datetime.now():
+            return False, "Cannot schedule appointments in the past"
+        
+        # Optional: Check if appointment is too far in the future (e.g., 1 year)
+        # max_future = datetime.now() + timedelta(days=365)
+        # if appointment_dt > max_future:
+        #     return False, "Cannot schedule appointments more than 1 year in advance"
+        
+        return True, None
+        
+    except ValueError:
+        return False, "Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS"
+
 # Initialize database with tables
 def init_db():
     conn = get_db()
@@ -207,6 +237,10 @@ def book_appointment():
     patient_name = data.get('patient_name')
     datetime_str = data.get('datetime')
     placeholder = get_placeholder()
+
+    is_valid, error_message = validate_appointment_datetime(datetime_str)
+    if not is_valid:
+        return jsonify({'error': error_message}), 400
     
     conn = get_db()
     cursor = conn.cursor()
@@ -251,6 +285,12 @@ def update_appointment(appointment_id):
     new_datetime = data.get('datetime')
     new_status = data.get('status')
     placeholder = get_placeholder()
+
+       # Validate datetime if provided
+    if new_datetime:
+        is_valid, error_message = validate_appointment_datetime(new_datetime)
+        if not is_valid:
+            return jsonify({'error': error_message}), 400
     
     conn = get_db()
     cursor = conn.cursor()
@@ -333,7 +373,7 @@ def get_caller_context():
             conn.close()
             return jsonify({
                   'dynamic_variables': {
-                    'patient_name': 'caller'
+                    'patient_name': 'new caller'
                 }
             })
             

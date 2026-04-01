@@ -7,7 +7,7 @@ A Telnyx-powered voice AI assistant that handles appointment scheduling, patient
 
 Healthcare administration involves significant phone-based work: collecting patient information, scheduling appointments, and managing practice logistics. This project demonstrates how Telnyx Voice AI can automate these tasks, allowing medical staff to focus on patient care while the AI handles routine scheduling operations.
 
-## Try It Now
+## Try It Now (doesn't work anymore)
 
 **Phone Number:** `1-406-381-2086`
 
@@ -109,13 +109,13 @@ The dashboard updates in real-time as you interact with the bot.
 -   **Railway** - Backend and MCP server hosting
 -   **Telnyx** - Voice AI platform
 
-## Live Deployments
+## Live Deployments (doesn't work anymore)
 
 Service
 
 URL
 
-**Frontend Dashboard**
+**Frontend Dashboard** 
 
 [https://telnyx-assignment-dashboard.vercel.app/](https://telnyx-assignment-dashboard.vercel.app/)
 
